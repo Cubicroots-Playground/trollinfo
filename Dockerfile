@@ -1,17 +1,14 @@
-FROM golang:1.22 as builder
+FROM golang:1.22-alpine as builder
 ARG VERSION="development"
 
 WORKDIR /run
 
 COPY ./ ./
 RUN go mod download
-RUN go build -ldflags="-w -s -X github.com/CubicrootXYZ/matrix-reminder-and-calendar-bot/cmd.Version=${VERSION}" -o /run ./cmd/remindme
+RUN go build -o /run ./cmd/daemon.go
 
-FROM golang:1.22
-RUN apt update && apt upgrade -y && \
-    apt install -y gcc && \
-    apt install libolm-dev npm -y
-COPY --from=builder /run/remindme /run/
+FROM golang:1.22-alpine
+COPY --from=builder /run/daemon /run/
 WORKDIR /run
 
-CMD ["/run/remindme"]
+CMD ["/run/daemon"]
