@@ -281,6 +281,19 @@ func (service *service) getNextShifts() error {
 		ReferenceTime:    refTime,
 	}
 
+	// Only send message if we have any content.
+	hasContent := false
+	for _, diff := range service.latestDiffs.DiffsInLocations {
+		if len(diff.UsersArriving) > 0 || len(diff.UsersLeaving) > 0 {
+			hasContent = true
+			break
+		}
+	}
+
+	if !hasContent {
+		return nil
+	}
+
 	msg, msgFormatted := service.diffToMessage(service.latestDiffs)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
