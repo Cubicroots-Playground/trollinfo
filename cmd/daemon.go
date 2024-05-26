@@ -26,7 +26,7 @@ func main() {
 
 	angelService := angelapi.New(&angelConfig)
 	messenger, err := matrixmessenger.NewMessenger(
-		&matrixConfig, gologger.New(gologger.LogLevelInfo, 0),
+		&matrixConfig, gologger.New(gologger.LogLevelDebug, 0),
 	)
 	if err != nil {
 		panic(err)

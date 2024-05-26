@@ -58,6 +58,7 @@ func New(config *Config, angelAPI angelapi.Service, messenger matrixmessenger.Me
 	}
 
 	http.HandleFunc("/data", s.serveJSONData)
+	http.HandleFunc("/", s.serveHumanData)
 	err := http.ListenAndServe(config.ListenAddr, nil)
 	if err != nil {
 		slog.Error("failed serving HTTP server", "error", err)
@@ -82,6 +83,22 @@ func (service *service) serveJSONData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = w.Write(data)
+}
+
+func (service *service) serveHumanData(w http.ResponseWriter, r *http.Request) {
+	err := service.requireToken(r)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte("unauthorized"))
+		return
+	}
+
+	html := "no data"
+	if service.latestDiffs != nil {
+		_, html = service.diffToMessage(service.latestDiffs)
+	}
+
+	_, _ = w.Write([]byte("<html>" + html + "</html>"))
 }
 
 func (service *service) Start() error {
