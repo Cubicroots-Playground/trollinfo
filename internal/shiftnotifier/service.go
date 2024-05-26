@@ -2,14 +2,19 @@ package shiftnotifier
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"log/slog"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Cubicroots-Playground/trollinfo/internal/angelapi"
 	"github.com/Cubicroots-Playground/trollinfo/internal/matrixmessenger"
+	"github.com/go-co-op/gocron/v2"
 
 	_ "time/tzdata"
 )
@@ -18,6 +23,10 @@ type service struct {
 	angelAPI  angelapi.Service
 	messenger matrixmessenger.Messenger
 	config    *Config
+	scheduler gocron.Scheduler
+	wg        *sync.WaitGroup
+
+	latestDiffs *shiftDiffs
 }
 
 // Config holds the configuration for the shift notifier.
@@ -25,6 +34,9 @@ type Config struct {
 	LocationNames          []string
 	NotifyBeforeShiftStart time.Duration
 	MatrixRoomID           string
+
+	ListenAddr string
+	Token      string
 }
 
 // ParseFromEnvironment parses the config from the environment.
@@ -32,25 +44,82 @@ func (c *Config) ParseFromEnvironment() {
 	c.LocationNames = strings.Split(os.Getenv("TROLLINFO_LOCATIONS"), ",")
 	c.MatrixRoomID = os.Getenv("TROLLINFO_MATRIX_ROOM_ID")
 	c.NotifyBeforeShiftStart = time.Minute * 15
+	c.ListenAddr = os.Getenv("TROLLINFO_HTTP_LISTEN_ADDR")
+	c.Token = os.Getenv("TROLLINFO_HTTP_TOKEN")
 }
 
 // New assembles a new shift notifier.
 func New(config *Config, angelAPI angelapi.Service, messenger matrixmessenger.Messenger) Service {
-	return &service{
+	s := &service{
 		angelAPI:  angelAPI,
 		messenger: messenger,
 		config:    config,
+		wg:        &sync.WaitGroup{},
 	}
+
+	http.HandleFunc("/data", s.serveJSONData)
+	err := http.ListenAndServe(config.ListenAddr, nil)
+	if err != nil {
+		slog.Error("failed serving HTTP server", "error", err)
+	}
+
+	return s
+}
+
+func (service *service) serveJSONData(w http.ResponseWriter, r *http.Request) {
+	err := service.requireToken(r)
+	if err != nil {
+		_, _ = w.Write([]byte("unauthorized"))
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	data, err := json.Marshal(service.latestDiffs)
+	if err != nil {
+		slog.Error("failed marshaling data", "error", err.Error())
+		_, _ = w.Write([]byte("internal server error"))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	_, _ = w.Write(data)
 }
 
 func (service *service) Start() error {
-	// TODO make loop
-	service.getNextShifts()
+	s, err := gocron.NewScheduler()
+	if err != nil {
+		return err
+	}
+
+	service.scheduler = s
+
+	_, err = service.scheduler.NewJob(
+		// Always 14 Minutes before full hour.
+		gocron.CronJob("46 * * * *", false),
+		gocron.NewTask(service.notifyShifts),
+	)
+	if err != nil {
+		return err
+	}
+
+	// If we are between XX:46 and XX:59 get the diffs now!
+	if time.Now().Minute() > 46 {
+		_ = service.getNextShifts()
+	}
+
+	// Start the scheduler.
+	service.wg.Add(1)
+	service.scheduler.Start()
+	slog.Info("started notifier", "jobs", len(service.scheduler.Jobs()))
+
+	service.wg.Wait()
 	return nil
 }
 
 func (service *service) Stop() error {
-	return nil
+	err := service.scheduler.Shutdown()
+	service.wg.Done()
+
+	return err
 }
 
 type shiftUser struct {
@@ -72,17 +141,33 @@ type shiftDiffs struct {
 	ReferenceTime    time.Time
 }
 
-func (service *service) getNextShifts() {
+func (service *service) notifyShifts() {
+	deadline := time.Now().Add(time.Minute * 4)
+	var err error
+	for time.Until(deadline) > 0 {
+		err = service.getNextShifts()
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		slog.Error("failed to run notifier", "error", err.Error())
+	}
+}
+
+func (service *service) getNextShifts() error {
+	slog.Info("checking shifts now")
+
 	locations, err := service.getLocationIDs()
 	if err != nil {
 		slog.Error("failed to list locations", "error", err.Error())
-		return
+		return err
 	}
 
 	diffs := map[string]shiftDiff{}
 
-	// TODO change to time.Now()
-	refTime := time.Date(2024, 5, 31, 19, 54, 0, 0, time.UTC)
+	// Use time.Date(2024, 5, 31, 19, 54, 0, 0, time.UTC) for testing.
+	refTime := time.Now()
 
 	for locationID, locationName := range locations {
 		diff := shiftDiff{
@@ -154,10 +239,12 @@ func (service *service) getNextShifts() {
 		diffs[locationName] = diff
 	}
 
-	msg, msgFormatted := service.diffToMessage(shiftDiffs{
+	service.latestDiffs = &shiftDiffs{
 		DiffsInLocations: service.cleanUpDiffs(diffs),
 		ReferenceTime:    refTime,
-	})
+	}
+
+	msg, msgFormatted := service.diffToMessage(service.latestDiffs)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
@@ -167,7 +254,10 @@ func (service *service) getNextShifts() {
 	))
 	if err != nil {
 		slog.Error("failed to send matrix message", "error", err.Error())
+		return err
 	}
+
+	return nil
 }
 
 func (service *service) getLocationIDs() (map[int64]string, error) {
@@ -253,7 +343,7 @@ func (service *service) cleanUpDiffs(diffs map[string]shiftDiff) map[string]shif
 	return newDiffs
 }
 
-func (service *service) diffToMessage(diffs shiftDiffs) (string, string) {
+func (service *service) diffToMessage(diffs *shiftDiffs) (string, string) {
 	msg := strings.Builder{}
 	msgHTML := strings.Builder{}
 
@@ -354,4 +444,12 @@ func usersToList(users []shiftUser, msg *strings.Builder, msgHTML *strings.Build
 		msgHTML.WriteString(user.ShiftName)
 		msgHTML.WriteString(")</i><br>\n")
 	}
+}
+
+func (service *service) requireToken(r *http.Request) error {
+	t := r.URL.Query().Get("token")
+	if strings.TrimSpace(t) != service.config.Token {
+		return errors.New("invalid auth")
+	}
+	return nil
 }
