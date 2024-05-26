@@ -1,6 +1,8 @@
 # Trollinfo
 
-Sending you information about your trolls.
+Sending you information about your trolls. Written in go in a single day, no guarantees anything is working here.
+
+Sends a message with arriving, staying and leaving trolls to a matrix channel 14 minutes before a shift starts. Further, displays a web view with the latest state of arriving, staying, leaving trolls at `/?token={your-token}` (use `refresh_seconds=2` parameter to auto-refresh the page) and exposes the data as JSON on `/data?token={your-token}`.
 
 ## Configure
 
