@@ -69,16 +69,16 @@ func New(config *Config, angelAPI angelapi.Service, messenger matrixmessenger.Me
 func (service *service) serveJSONData(w http.ResponseWriter, r *http.Request) {
 	err := service.requireToken(r)
 	if err != nil {
-		_, _ = w.Write([]byte("unauthorized"))
 		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte("unauthorized"))
 		return
 	}
 
 	data, err := json.Marshal(service.latestDiffs)
 	if err != nil {
 		slog.Error("failed marshaling data", "error", err.Error())
-		_, _ = w.Write([]byte("internal server error"))
 		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("internal server error"))
 		return
 	}
 	_, _ = w.Write(data)
