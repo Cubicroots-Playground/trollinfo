@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -89,12 +90,28 @@ func (service *service) serveHumanData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	html := "no data"
-	if service.latestDiffs != nil {
-		_, html = service.diffToMessage(service.latestDiffs)
+	if service.latestDiffs == nil {
+		_, _ = w.Write([]byte("no data"))
+		return
 	}
 
-	_, _ = w.Write([]byte("<html>" + html + "</html>"))
+	_, html := service.diffToMessage(service.latestDiffs)
+
+	if refreshSeconds := r.URL.Query().Get("refresh_seconds"); refreshSeconds != "" {
+		html = `<meta http-equiv="refresh" content="` + refreshSeconds + `">` + html
+	}
+
+	html = `<html>
+<style>
+body {
+	background:#111;
+	color:darkgrey;
+	font-family: sans-serif;
+}
+</style>
+	` + html + "</html>"
+
+	_, _ = w.Write([]byte(html))
 }
 
 func (service *service) Start() error {
@@ -386,7 +403,14 @@ func (service *service) diffToMessage(diffs *shiftDiffs) (string, string) {
 	msgHTML.WriteString(timeStr)
 	msgHTML.WriteString("</h1><br>\n")
 
-	for loc, diff := range diffs.DiffsInLocations {
+	// Sort by mapkey to have deterministic order.
+	locations := make([]string, 0, len(diffs.DiffsInLocations))
+	for k := range diffs.DiffsInLocations {
+		locations = append(locations, k)
+	}
+	sort.Strings(locations)
+
+	for _, loc := range locations {
 		// Location.
 		msg.WriteString("📍 ")
 		msg.WriteString(loc)
@@ -399,27 +423,27 @@ func (service *service) diffToMessage(diffs *shiftDiffs) (string, string) {
 		// Troll lists.
 		msg.WriteString("Arriving Trolls 🔜:\n")
 		msgHTML.WriteString("Arriving Trolls 🔜:<br>\n")
-		usersToList(diff.UsersArriving, &msg, &msgHTML)
+		usersToList(diffs.DiffsInLocations[loc].UsersArriving, &msg, &msgHTML)
 
 		msg.WriteString("Staying Trolls 🔄:\n")
 		msgHTML.WriteString("Staying Trolls 🔄:<br>\n")
-		usersToList(diff.UsersWorking, &msg, &msgHTML)
+		usersToList(diffs.DiffsInLocations[loc].UsersWorking, &msg, &msgHTML)
 
 		msg.WriteString("Leaving Trolls 🔚:\n")
 		msgHTML.WriteString("Leaving Trolls 🔚:<br>\n")
-		usersToList(diff.UsersLeaving, &msg, &msgHTML)
+		usersToList(diffs.DiffsInLocations[loc].UsersLeaving, &msg, &msgHTML)
 
 		// Summary.
 		msg.WriteString("\nExpecting ")
-		msg.WriteString(strconv.Itoa(int(diff.ExpectedUsers)))
+		msg.WriteString(strconv.Itoa(int(diffs.DiffsInLocations[loc].ExpectedUsers)))
 		msg.WriteString(" trolls total\n")
 		msgHTML.WriteString("<br>\nExpecting ")
-		msgHTML.WriteString(strconv.Itoa(int(diff.ExpectedUsers)))
+		msgHTML.WriteString(strconv.Itoa(int(diffs.DiffsInLocations[loc].ExpectedUsers)))
 		msgHTML.WriteString(" trolls total<br>\n")
 
-		if len(diff.OpenUsers) > 0 {
+		if len(diffs.DiffsInLocations[loc].OpenUsers) > 0 {
 			msg.WriteString("🚨 Open positions:\n")
-			for shiftType, amount := range diff.OpenUsers {
+			for shiftType, amount := range diffs.DiffsInLocations[loc].OpenUsers {
 				msg.WriteString("- ")
 				msg.WriteString(strconv.Itoa(int(amount)))
 				msg.WriteString("x ")
@@ -428,7 +452,7 @@ func (service *service) diffToMessage(diffs *shiftDiffs) (string, string) {
 			}
 
 			msgHTML.WriteString("🚨 Open positions:<br>\n")
-			for shiftType, amount := range diff.OpenUsers {
+			for shiftType, amount := range diffs.DiffsInLocations[loc].OpenUsers {
 				msgHTML.WriteString("- ")
 				msgHTML.WriteString(strconv.Itoa(int(amount)))
 				msgHTML.WriteString("x ")
