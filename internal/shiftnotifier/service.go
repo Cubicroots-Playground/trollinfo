@@ -59,10 +59,6 @@ func New(config *Config, angelAPI angelapi.Service, messenger matrixmessenger.Me
 
 	http.HandleFunc("/data", s.serveJSONData)
 	http.HandleFunc("/", s.serveHumanData)
-	err := http.ListenAndServe(config.ListenAddr, nil)
-	if err != nil {
-		slog.Error("failed serving HTTP server", "error", err)
-	}
 
 	return s
 }
@@ -102,6 +98,13 @@ func (service *service) serveHumanData(w http.ResponseWriter, r *http.Request) {
 }
 
 func (service *service) Start() error {
+	go func(config Config) {
+		err := http.ListenAndServe(config.ListenAddr, nil)
+		if err != nil {
+			slog.Error("failed serving HTTP server", "error", err)
+		}
+	}(*service.config)
+
 	s, err := gocron.NewScheduler()
 	if err != nil {
 		return err
