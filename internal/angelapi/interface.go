@@ -1,6 +1,8 @@
 package angelapi
 
-var TimeFormatISO8601 = "2006-01-02T15:04:05.999Z"
+import "time"
+
+var timeFormatISO8601 = "2006-01-02T15:04:05.999Z"
 
 // Service defines an angelapi service.
 type Service interface {
@@ -27,8 +29,11 @@ type Shift struct {
 	ID          int64  `json:"id"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
-	StartsAt    string `json:"starts_at"` // ISO-8601.
-	EndsAt      string `json:"ends_at"`   // ISO-8601.
+	StartsAtRaw string `json:"starts_at"` // ISO-8601.
+	EndsAtRaw   string `json:"ends_at"`   // ISO-8601.
+	StartsAt    time.Time
+	EndsAt      time.Time
+	Entries     []ShiftEntry `json:"entries"`
 }
 
 // ShiftType represents a shift type.

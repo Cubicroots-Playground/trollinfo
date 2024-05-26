@@ -1,8 +1,10 @@
 package angelapi
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 func (service *service) ListLocations(_ *ListLocationsOpts) ([]Location, error) {
@@ -20,6 +22,21 @@ func (service *service) ListShiftsInLocation(locationID int64, _ *ListShiftsInLo
 	err := service.makeRequest(http.MethodGet, "/api/v0-beta/locations/"+strconv.Itoa(int(locationID))+"/shifts", nil, &response)
 	if err != nil {
 		return nil, err
+	}
+
+	// Parse time.
+	for i := range response["data"] {
+		startsAt, err := time.Parse(timeFormatISO8601, response["data"][i].StartsAtRaw)
+		if err != nil {
+			slog.Error("failed to parse time", "time", response["data"][i].StartsAtRaw, "error", err.Error())
+		}
+		endsAt, err := time.Parse(timeFormatISO8601, response["data"][i].EndsAtRaw)
+		if err != nil {
+			slog.Error("failed to parse time", "time", response["data"][i].EndsAtRaw, "error", err.Error())
+		}
+
+		response["data"][i].StartsAt = startsAt
+		response["data"][i].EndsAt = endsAt
 	}
 
 	return response["data"], nil

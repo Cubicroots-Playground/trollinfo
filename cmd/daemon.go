@@ -1,21 +1,34 @@
 package main
 
 import (
-	"fmt"
-
+	"github.com/CubicrootXYZ/gologger"
 	"github.com/Cubicroots-Playground/trollinfo/internal/angelapi"
+	"github.com/Cubicroots-Playground/trollinfo/internal/matrixmessenger"
+	"github.com/Cubicroots-Playground/trollinfo/internal/shiftnotifier"
 )
 
 func main() {
 	angelConfig := angelapi.Config{}
 	angelConfig.ParseFromEnvironment()
 
-	angelService := angelapi.New(&angelConfig)
+	matrixConfig := matrixmessenger.Config{}
+	matrixConfig.ParseFromEnvironment()
 
-	locs, err := angelService.ListShiftsInLocation(1, nil)
+	notifierConfig := shiftnotifier.Config{}
+	notifierConfig.ParseFromEnvironment()
+
+	angelService := angelapi.New(&angelConfig)
+	messenger, err := matrixmessenger.NewMessenger(
+		&matrixConfig, gologger.New(gologger.LogLevelInfo, 0),
+	)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println(locs)
+	shiftNotifier := shiftnotifier.New(&notifierConfig, angelService, messenger)
+
+	err = shiftNotifier.Start()
+	if err != nil {
+		panic(err)
+	}
 }
