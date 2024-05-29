@@ -85,21 +85,6 @@ func (service *service) serveHumanLandscape(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	service.latestDiffs.DiffsInLocations["test"] = shiftDiff{
-		ExpectedUsers: 200,
-		OpenUsers:     map[string]int64{"Gulasch": 3, "Drucker": 7},
-		UsersLeaving: []shiftUser{
-			{
-				Nickname:  "cubic",
-				ShiftName: "Tschunk",
-			},
-			{
-				Nickname:  "2222222",
-				ShiftName: "Tschunkfsdfadd",
-			},
-		},
-	}
-
 	tmpl, err := template.New("landscape").Parse(landscapeTemplate)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
