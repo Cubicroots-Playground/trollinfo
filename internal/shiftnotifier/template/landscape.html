@@ -1,0 +1,104 @@
+<html>
+
+<head>
+    {{ if .refresh_seconds }}
+    <meta http-equiv="refresh" content="{{ .refresh_seconds }}">
+    {{ end }}
+
+    <style>
+        html {
+            background: black;
+            color: darkgrey;
+            font-family: sans-serif;
+            min-height: 100%;
+            min-width: 100%;
+            font-size: 130%;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        .flexcontainer {
+            display: flex;
+            justify-content: space-around;
+        }
+
+        .flexcontainer .flexchild {
+            padding: 4em;
+            background: #111;
+            margin: 0.5em;
+        }
+
+        .textbig {
+            font-size: 120%;
+        }
+
+        .badge {
+            background-color: #CCC;
+            color: #111;
+            padding: 0.3em;
+            border-radius: 0.3em;
+            line-height: 200%;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Upcoming Troll Changes for {{ .shift_time }}</h1>
+
+    <div class="flexcontainer">
+        {{ range $location, $diffs := .data.DiffsInLocations }}
+        <div class="flexchild">
+            <span class="textbig">📍 <b>{{ $location }}</b></span><br><br>
+            Arriving Trolls 🔜:<br>
+            {{ if $diffs.UsersArriving }}
+            <ul>
+                {{ range $diffs.UsersArriving }}
+                <li>{{ .Nickname }} <i>({{ .ShiftName }})</i></li>
+                {{ end }}
+            </ul>
+            {{ else }}
+            &nbsp;&nbsp;<i>none</i><br>
+            {{ end }}
+            <br>
+
+            Staying Trolls 🔄:<br>
+            {{ if $diffs.UsersWorking }}
+            <ul>
+                {{ range $diffs.UsersWorking }}
+                <li>{{ .Nickname }} <i>({{ .ShiftName }})</i></li>
+                {{ end }}
+            </ul>
+            {{ else }}
+            &nbsp;&nbsp;<i>none</i><br>
+            {{ end }}
+            <br>
+
+            Leaving Trolls 🔚:<br>
+            {{ if $diffs.UsersLeaving }}
+            <ul>
+                {{ range $diffs.UsersLeaving }}
+                <li>{{ .Nickname }} <i>({{ .ShiftName }})</i></li>
+                {{ end }}
+            </ul>
+            {{ else }}
+            &nbsp;&nbsp;<i>none</i><br>
+            {{ end }}
+            <br><br>
+            <span class="badge">{{ $diffs.ExpectedUsers }}</span> Trolls expected.<br><br>
+            {{ if $diffs.OpenUsers }}
+            🚨 Open positions:<br>
+            <ul>
+                {{ range $shiftType, $amount := $diffs.OpenUsers }}
+                <li><span class="badge">{{ $amount }}</span> {{ $shiftType }}</li>
+                {{ end }}
+            </ul>
+            {{ end }}
+
+        </div>
+        {{ end }}
+    </div>
+</body>
+
+</html>

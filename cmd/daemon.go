@@ -46,7 +46,7 @@ func main() {
 			slog.Info("at least one process exited, shutting down")
 		}
 
-		err = shiftNotifier.Stop()
+		err := shiftNotifier.Stop()
 		if err != nil {
 			slog.Error("failed stopping notifier", "error", err.Error())
 		}

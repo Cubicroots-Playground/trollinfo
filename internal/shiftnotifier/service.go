@@ -55,7 +55,8 @@ func New(config *Config, angelAPI angelapi.Service, messenger matrixmessenger.Me
 	}
 
 	http.HandleFunc("/data", s.serveJSONData)
-	http.HandleFunc("/", s.serveHumanData)
+	http.HandleFunc("/", s.serveHumanPortrait)
+	http.HandleFunc("/landscape", s.serveHumanLandscape)
 
 	return s
 }
