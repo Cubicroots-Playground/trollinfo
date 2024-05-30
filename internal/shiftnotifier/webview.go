@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"text/template"
+	"time"
 
 	_ "embed"
 )
@@ -85,6 +86,16 @@ func (service *service) serveHumanLandscape(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	defaultTZ, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		defaultTZ = time.Local
+	}
+
+	timeStr := service.latestDiffs.ReferenceTime.
+		Add(service.config.NotifyBeforeShiftStart).
+		In(defaultTZ).
+		Format("Mon, 15:04")
+
 	tmpl, err := template.New("landscape").Parse(landscapeTemplate)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -94,7 +105,7 @@ func (service *service) serveHumanLandscape(w http.ResponseWriter, r *http.Reque
 	err = tmpl.Execute(w, map[string]any{
 		"data":            service.latestDiffs,
 		"refresh_seconds": r.URL.Query().Get("refresh_seconds"),
-		"shift_time":      service.latestDiffs.ReferenceTime.Format("Mon, 15:04"),
+		"shift_time":      timeStr,
 	})
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
